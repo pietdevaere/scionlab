@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
+	"os"
 
 	"github.com/scionproto/scion/go/lib/snet"
 )
@@ -29,6 +31,8 @@ func main() {
 		clientAddress string
 		serverAddress string
 
+		csvPath string
+
 		err    error
 		local  *snet.Addr
 		remote *snet.Addr
@@ -37,6 +41,7 @@ func main() {
 	)
 
 	// Fetch arguments from command line
+	flag.StringVar(&csvPath, "f", "", "File to write data to")
 	flag.StringVar(&clientAddress, "c", "", "Client SCION Address")
 	flag.StringVar(&serverAddress, "s", "", "Server SCION Address")
 	flag.Parse()
@@ -73,5 +78,39 @@ func main() {
 	n, _, err = udpConnection.ReadFrom(receivePacketBuffer)
 	check(err)
 
-	fmt.Print(string(receivePacketBuffer[:n]))
+	raw_response := string(receivePacketBuffer[:n])
+	split_response := strings.Split(raw_response, "\n")
+
+	fmt.Println(raw_response)
+
+	response := make(map[string]string)
+
+	response["date"] = split_response[0]
+
+	for i:=1; i<len(split_response); i++ {
+		split_line := strings.Split(split_response[i], ": ")
+		if len(split_line) > 1 {
+			response[split_line[0]] = split_line[1]
+//			fmt.Println(split_line[0], "is", split_line[1])
+		}
+	}
+
+	// fmt.Println(response)
+
+	columns := []string{"date", "Illuminance", "UV Light", "CO2", "Sound intensity", "Humidity", "Temperature", "Motion"}
+
+	if len(csvPath) > 0 {
+		csvFile, err := os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		check(err)
+
+		for i, column := range columns {
+			fmt.Fprintf(csvFile, "%v", response[column])
+			if i == len(columns) - 1{
+				fmt.Fprintf(csvFile, "\n")
+			} else {
+				fmt.Fprintf(csvFile, ",")
+			}
+		}
+	}
 }
+
